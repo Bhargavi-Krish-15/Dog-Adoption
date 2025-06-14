@@ -1,0 +1,51 @@
+services:
+  ollama:
+    image: 'ollama/ollama:latest'
+    ports:
+      - '11434:11434'
+    volumes:
+      - ./entrypoint.sh:/entrypoint.sh
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+  pgvector:
+    image: 'pgvector/pgvector:pg16'
+    environment:
+      - 'POSTGRES_DB=mydatabase'
+      - 'POSTGRES_PASSWORD=secret'
+      - 'POSTGRES_USER=myuser'
+    labels:
+      - "org.springframework.boot.service-connection=postgres"
+    ports:
+      - '5432:5432'
+  assistant:
+    build:
+      context: ./assistant
+    image: assistant-app
+    depends_on:
+      - pgvector
+      - scheduler
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_TOOL_SCHEDULER_URL=http://scheduler:8081
+      - SPRING_AI_OLLAMA_BASE_URL=http://ollama:11434
+      - SPRING_PROFILES_ACTIVE=default
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://pgvector/mydatabase
+      - SPRING_DATASOURCE_USERNAME=myuser
+      - SPRING_DATASOURCE_PASSWORD=secret
+  scheduler:
+    build:
+      context: ./scheduler
+    image: scheduler-app
+    depends_on:
+      - pgvector
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      # - SPRING_DATASOURCE_URL=jdbc:postgresql://pgvector/mydatabase
+      # - SPRING_DATASOURCE_USERNAME=myuser
+      # - SPRING_DATASOURCE_PASSWORD=secret
+
+volumes:
+  ollama_data:
